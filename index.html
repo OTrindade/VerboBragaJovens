@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Site de Logs com Firebase</title>
+
+    <!-- Scripts do Firebase (versão compat) -->
+    <script src="https://www.gstatic.com/firebasejs/9.21.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.21.0/firebase-analytics-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.21.0/firebase-firestore-compat.js"></script>
+  </head>
+  <body>
+    <h1>Logs de Visita</h1>
+    <p>
+      Exemplo de capturar país, cidade, dispositivo e browser, 
+      e salvar tudo no Firestore.
+    </p>
+
+    <script>
+      // ============== 1) CONFIGURAR O FIREBASE ============== //
+      const firebaseConfig = {
+        apiKey: "AIzaSyBDhQTXd2UT2Rhpj7ZDXkztgkFcj7cbndU",
+        authDomain: "verbo-braga-jovens.firebaseapp.com",
+        projectId: "verbo-braga-jovens",
+        storageBucket: "verbo-braga-jovens.firebasestorage.app",
+        messagingSenderId: "1047639862875",
+        appId: "1:1047639862875:web:e2f36568c282db1188197e",
+        measurementId: "G-HG530GGJRH"
+      };
+
+      // Inicializa o Firebase
+      firebase.initializeApp(firebaseConfig);
+      firebase.analytics();
+      const db = firebase.firestore();
+
+      // ============== 2) DETECTAR BROWSER E DISPOSITIVO ============== //
+      // Vamos pegar algumas infos básicas do userAgent
+      const userAgent = navigator.userAgent || "Desconhecido";
+
+      // Função simples para identificar se é mobile ou desktop
+      let deviceType = "Desktop";
+      if (/Mobi|Android|iPhone|iPad|iPod/i.test(userAgent)) {
+        deviceType = "Mobile";
+      }
+
+      // Para tentar captar marca/modelo, podemos usar regex bem simplificado.
+      // Ou, idealmente, usar uma lib como UAParser.js. Mas aqui vai um exemplo básico:
+      let deviceBrand = "Desconhecido";
+      if (/Samsung/i.test(userAgent)) {
+        deviceBrand = "Samsung";
+      } else if (/iPhone/i.test(userAgent)) {
+        deviceBrand = "iPhone";
+      } else if (/Huawei/i.test(userAgent)) {
+        deviceBrand = "Huawei";
+      } else if (/Xiaomi/i.test(userAgent)) {
+        deviceBrand = "Xiaomi";
+      } else if (/Macintosh/i.test(userAgent) && deviceType === "Desktop") {
+        deviceBrand = "Apple (Mac)";
+      } else if (/Windows/i.test(userAgent)) {
+        deviceBrand = "Windows";
+      } 
+      // Você pode melhorar esse trecho para outros fabricantes.
+
+      // Pegando o nome do navegador (bem simplificado)
+      let browserName = "Desconhecido";
+      if (userAgent.indexOf("Chrome") !== -1) {
+        browserName = "Chrome";
+      } else if (userAgent.indexOf("Safari") !== -1) {
+        // Note que todo Chrome no Android tb tem "Safari" no UA, 
+        // por isso a ordem das condições importa.
+        browserName = "Safari";
+      } else if (userAgent.indexOf("Firefox") !== -1) {
+        browserName = "Firefox";
+      } else if (userAgent.indexOf("MSIE") !== -1 || userAgent.indexOf("Trident") !== -1) {
+        browserName = "Internet Explorer";
+      } else if (userAgent.indexOf("Edg") !== -1) {
+        browserName = "Edge";
+      }
+
+      // ============== 3) PEGAR PAÍS E CIDADE (via IP) ============== //
+      // Usaremos a API pública ipapi.co
+      function getIpLocationData() {
+        return fetch("https://ipapi.co/json/")
+          .then(response => response.json())
+          .then(data => {
+            const locationData = {
+              ip: data.ip,
+              city: data.city,
+              region: data.region,
+              country: data.country_name
+            };
+            return locationData;
+          })
+          .catch(err => {
+            console.error("Erro ao buscar dados de IP:", err);
+            return {
+              ip: null,
+              city: null,
+              region: null,
+              country: null
+            };
+          });
+      }
+
+      // ============== 4) PEGAR GEOLOCATION (via navegador) ============== //
+      function getBrowserGeolocation() {
+        return new Promise((resolve) => {
+          if ("geolocation" in navigator) {
+            navigator.geolocation.getCurrentPosition(
+              (position) => {
+                resolve({
+                  lat: position.coords.latitude,
+                  lng: position.coords.longitude
+                });
+              },
+              () => {
+                // Se o usuário negar ou der erro, devolve nulo
+                resolve({ lat: null, lng: null });
+              }
+            );
+          } else {
+            // Se não tiver geolocalização
+            resolve({ lat: null, lng: null });
+          }
+        });
+      }
+
+      // ============== 5) REGISTRAR VISITA NO FIRESTORE ============== //
+      async function registrarVisita() {
+        // Coleta as infos em paralelo
+        const [ipLocationData, browserGeo] = await Promise.all([
+          getIpLocationData(),
+          getBrowserGeolocation()
+        ]);
+
+        const dataAtual = new Date();
+
+        // Monta o objeto que queremos salvar
+        const visitaData = {
+          data: dataAtual.toISOString(),
+          ip: ipLocationData.ip,
+          pais: ipLocationData.country,
+          cidade: ipLocationData.city,
+          regiao: ipLocationData.region,
+          latitude: browserGeo.lat,
+          longitude: browserGeo.lng,
+          dispositivo: deviceType,
+          marcaModelo: deviceBrand,
+          navegador: browserName,
+          userAgentCompleto: userAgent // se quiser guardar
+        };
+
+        // Salva no Firestore, coleção "visitas"
+        db.collection("visitas")
+          .add(visitaData)
+          .then((docRef) => {
+            console.log("Visita registrada com ID:", docRef.id);
+          })
+          .catch((error) => {
+            console.error("Erro ao registrar visita:", error);
+          });
+      }
+
+      // ============== 6) INICIAR O PROCESSO ============== //
+      registrarVisita();
+    </script>
+  </body>
+</html>
