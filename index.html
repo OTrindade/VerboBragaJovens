@@ -13,6 +13,7 @@
         width: 100%;
         height: 100%;
         background-color: #000; /* Fundo preto */
+        margin-bottom: 10px;
       }
       #videoContainer {
         position: relative;
@@ -28,9 +29,34 @@
         max-width: 100%;
         max-height: 100%;
       }
-      h1, p {
+      #playButton {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 10;
+        background-color: rgba(0, 0, 0, 0.7);
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        font-size: 1.5em;
+        cursor: pointer;
+        border-radius: 5px;
+        display: block; /* Botão aparece apenas quando pausado */
+      }
+      h1 {
         color: white;
         text-align: center;
+        font-size: 3vw;
+        margin-bottom: 0.5em;
+        font-family: 'Lobster', cursive;
+      }
+      p {
+        color: white;
+        text-align: center;
+        font-size: 1.5vw;
+        margin-top: 0.5em;
+        font-family: 'Lobster', cursive;
       }
     </style>
 
@@ -38,9 +64,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.21.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.21.0/firebase-analytics-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.21.0/firebase-firestore-compat.js"></script>
-
-    <!-- Configuração externa do Firebase -->
-    <script src="config.js"></script>
   </head>
   <body>
     <div id="videoContainer">
@@ -49,35 +72,147 @@
         src="img/videos.mp4"
         loop
         autoplay
-        muted
       ></video>
+      <button id="playButton">▶</button>
     </div>
 
     <h1>Verbo da Vida Braga</h1>
     <p>Praceta Beato Inácio de Azevedo 3</p>
 
     <script>
-      // Inicializar Firebase
+      // ============== 1) CONFIGURAR O FIREBASE ============== //
+      const firebaseConfig = {
+        apiKey: "AIzaSyBDhQTXd2UT2Rhpj7ZDXkztgkFcj7cbndU",
+        authDomain: "verbo-braga-jovens.firebaseapp.com",
+        projectId: "verbo-braga-jovens",
+        storageBucket: "verbo-braga-jovens.firebasestorage.app",
+        messagingSenderId: "1047639862875",
+        appId: "1:1047639862875:web:e2f36568c282db1188197e",
+        measurementId: "G-HG530GGJRH"
+      };
+
       firebase.initializeApp(firebaseConfig);
       firebase.analytics();
       const db = firebase.firestore();
 
-      // Função para registrar visita
+      // ============== 2) DETECTAR BROWSER E DISPOSITIVO ============== //
+      const userAgent = navigator.userAgent || "Desconhecido";
+
+      let deviceType = "Desktop";
+      if (/Mobi|Android|iPhone|iPad|iPod/i.test(userAgent)) {
+        deviceType = "Mobile";
+      }
+
+      let deviceBrand = "Desconhecido";
+      if (/Samsung/i.test(userAgent)) {
+        deviceBrand = "Samsung";
+      } else if (/iPhone/i.test(userAgent)) {
+        deviceBrand = "iPhone";
+      } else if (/Huawei/i.test(userAgent)) {
+        deviceBrand = "Huawei";
+      } else if (/Xiaomi/i.test(userAgent)) {
+        deviceBrand = "Xiaomi";
+      } else if (/Macintosh/i.test(userAgent) && deviceType === "Desktop") {
+        deviceBrand = "Apple (Mac)";
+      } else if (/Windows/i.test(userAgent)) {
+        deviceBrand = "Windows";
+      }
+
+      let browserName = "Desconhecido";
+      if (userAgent.indexOf("Chrome") !== -1) {
+        browserName = "Chrome";
+      } else if (userAgent.indexOf("Safari") !== -1) {
+        browserName = "Safari";
+      } else if (userAgent.indexOf("Firefox") !== -1) {
+        browserName = "Firefox";
+      } else if (userAgent.indexOf("MSIE") !== -1 || userAgent.indexOf("Trident") !== -1) {
+        browserName = "Internet Explorer";
+      } else if (userAgent.indexOf("Edg") !== -1) {
+        browserName = "Edge";
+      }
+
+      // ============== 3) PEGAR PAÍS E CIDADE (via IP) ============== //
+      function getIpLocationData() {
+        return fetch("https://ipapi.co/json/")
+          .then(response => response.json())
+          .then(data => {
+            return {
+              ip: data.ip,
+              city: data.city,
+              region: data.region,
+              country: data.country_name
+            };
+          })
+          .catch(err => {
+            console.error("Erro ao buscar dados de IP:", err);
+            return {
+              ip: null,
+              city: null,
+              region: null,
+              country: null
+            };
+          });
+      }
+
+      // ============== 4) REGISTRAR VISITA NO FIRESTORE ============== //
       async function registrarVisita() {
-        const userAgent = navigator.userAgent || "Desconhecido";
+        const ipLocationData = await getIpLocationData();
+
         const dataAtual = new Date();
+
         const visitaData = {
           data: dataAtual.toISOString(),
-          navegador: userAgent,
+          ip: ipLocationData.ip,
+          pais: ipLocationData.country,
+          cidade: ipLocationData.city,
+          regiao: ipLocationData.region,
+          dispositivo: deviceType,
+          marcaModelo: deviceBrand,
+          navegador: browserName,
+          userAgentCompleto: userAgent
         };
 
         db.collection("visitas")
           .add(visitaData)
-          .then(() => console.log("Visita registrada com sucesso!"))
-          .catch((err) => console.error("Erro ao registrar visita:", err));
+          .then((docRef) => {
+            console.log("Visita registrada com ID:", docRef.id);
+          })
+          .catch((error) => {
+            console.error("Erro ao registrar visita:", error);
+          });
       }
 
+      // ============== 5) INICIAR PROCESSO (assim que a página carregar) ============== //
       registrarVisita();
+
+      // ============== 6) CONTROLAR O VÍDEO POR CLIQUE ============== //
+      const meuVideo = document.getElementById("meuVideo");
+      const playButton = document.getElementById("playButton");
+
+      // Exibir o botão "Play" quando o vídeo estiver pausado
+      meuVideo.addEventListener("pause", () => {
+        playButton.style.display = "block";
+      });
+
+      // Esconder o botão "Play" quando o vídeo estiver tocando
+      meuVideo.addEventListener("play", () => {
+        playButton.style.display = "none";
+      });
+
+      // Controlar o vídeo pelo botão "Play"
+      playButton.addEventListener("click", () => {
+        meuVideo.play();
+      });
+
+      // Pausar o vídeo ao clicar nele
+      meuVideo.addEventListener("click", () => {
+        if (meuVideo.paused) {
+          meuVideo.play();
+        } else {
+          meuVideo.pause();
+        }
+      });
     </script>
   </body>
 </html>
+
