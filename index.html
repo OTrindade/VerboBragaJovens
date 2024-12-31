@@ -28,8 +28,10 @@
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        max-width: 100%;
-        max-height: 100%;
+        width: 100%;
+        height: 100%;
+        object-fit: contain; /* Ajusta o vídeo para caber sem cortar */
+        background-color: black; /* Adiciona um fundo preto para preencher as bordas */
       }
     
       #playButton {
@@ -46,7 +48,16 @@
         cursor: pointer;
         border-radius: 5px;
         display: block;
-      }
+    }
+
+        /* Ajustes para dispositivos menores */
+    @media (max-width: 600px) {
+        #playButton {
+            padding: 15px 30px; /* Aumenta o espaço interno */
+            font-size: 2em; /* Torna o ícone maior */
+            border-radius: 8px; /* Ajuste estético para bordas */
+        }
+    }
     
       h1 {
         color: white;
@@ -243,4 +254,3 @@
     </script>
   </body>
 </html>
-
